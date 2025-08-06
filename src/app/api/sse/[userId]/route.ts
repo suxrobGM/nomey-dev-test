@@ -5,6 +5,12 @@ interface Params {
   params: Promise<{ userId: string }>;
 }
 
+const sseHeaders = {
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache, no-transform",
+  Connection: "keep-alive",
+};
+
 export async function GET(
   req: NextRequest,
   { params }: Params,
@@ -14,12 +20,6 @@ export async function GET(
   // Register and start heartbeat
   const client = SSEManager.default.createClient(userId);
   client.startHeartbeat();
-
-  const headers = new Headers({
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-  });
 
   console.log(`SSE client connected: ${client.id}, user ID: ${userId}`);
 
@@ -39,5 +39,8 @@ export async function GET(
       .catch((err) => console.error(`Error removing SSE client: ${err}`));
   });
 
-  return new NextResponse(client.readable, { headers, status: 200 });
+  return new NextResponse(client.readable, {
+    headers: sseHeaders,
+    status: 200,
+  });
 }

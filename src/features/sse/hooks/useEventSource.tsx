@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { EventSourceState, SSEReadyState } from "../types";
-
-/** Map event name -> payload type */
-export type EventMap = Record<string, unknown>;
+import type {
+  EventDataParser,
+  EventMap,
+  EventSourceHandlers,
+  EventSourceState,
+  EventReadyState,
+} from "../types";
 
 /**
  * Options for the useEventSource hook.
@@ -17,7 +20,7 @@ interface UseEventSourceOptions<TEvents extends EventMap = EventMap> {
   /** Optional Last-Event-ID to resume a stream */
   lastEventId?: string;
   /** Custom parser for event.data (default: JSON.parse with fallback to string) */
-  parse?: (raw: string) => unknown;
+  parse?: EventDataParser;
   /** Auto-reconnect config */
   reconnect?: {
     /** Enable automatic reconnection (default: true) */
@@ -33,22 +36,20 @@ interface UseEventSourceOptions<TEvents extends EventMap = EventMap> {
    * Handlers for named events plus defaults.
    * Example: on: { demo: (data) => ..., message: (data)=>..., open: ()=>..., error: (e)=>... }
    */
-  on?: Partial<{
-    open: () => void;
-    error: (e: Event) => void;
-    message: (data: unknown, ev: MessageEvent) => void; // unnamed events
-  }> & {
-    [K in keyof TEvents]?: (data: TEvents[K], ev: MessageEvent) => void;
-  };
+  on?: EventSourceHandlers<TEvents>;
 }
 
-interface UseEventSourceResponse {
-  state: EventSourceState;
+/**
+ * Response type for the useEventSource hook.
+ */
+interface UseEventSourceResponse extends EventSourceState {
+  /** Connect to the SSE endpoint */
   connect: () => void;
+  /** Disconnect from the SSE endpoint */
   disconnect: () => void;
 }
 
-function defaultParser(raw: string): unknown {
+function parseJson(raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
@@ -59,10 +60,31 @@ function defaultParser(raw: string): unknown {
 /**
  * Hook to manage a Server-Sent Events (SSE) connection and state.
  * This hook provides a simple interface to connect, disconnect, and handle events from an SSE endpoint.
+ * It supports automatic reconnection with exponential backoff and allows for custom event handlers.
+ *
  * @param url The SSE endpoint URL to connect to.
  * @template TEvents Optional type for event names and payloads.
  * @param opts Optional configuration for the SSE connection.
  * @returns An object containing the current state of the connection and methods to connect/disconnect.
+ *
+ * @example
+ * // Custom named events
+ * interface SSEvents {
+ *   connected: { clientId: string; userId: string };
+ * }
+ *
+ * // Automatically connect to an SSE endpoint
+ * const { connected, connect, disconnect } = useEventSource<SSEvents>(`/api/sse/${userId}`, {
+ *   on: {
+ *     // Default handlers
+ *     open: () => console.log("SSE opened"),
+ *     message: (data) => console.log("Received message:", data),
+ *     error: (e) => console.error("SSE error:", e),
+ *
+ *     // Custom named event handler
+ *     connected: (data) => console.log("SSE connected:", data),
+ *   },
+ *  }
  */
 export function useEventSource<TEvents extends EventMap = EventMap>(
   url: string,
@@ -72,7 +94,7 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
     enabled = true,
     withCredentials = false,
     lastEventId,
-    parse = defaultParser,
+    parse = parseJson,
     on,
     reconnect = {},
   } = opts ?? {};
@@ -174,7 +196,7 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
       setState((s) => ({
         ...s,
         connected: false,
-        readyState: eventSource.readyState as SSEReadyState,
+        readyState: eventSource.readyState as EventReadyState,
         error: e,
       }));
 
@@ -187,7 +209,7 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
 
     eventSource.onmessage = (ev) => {
       const data = parse(ev.data as string);
-      console.log("Received SSE message:", ev);
+      console.log("Received unnamed message:", data);
 
       setState((s) => ({
         ...s,
@@ -225,7 +247,7 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
   };
 
   return {
-    state,
+    ...state,
     connect,
     disconnect,
   };

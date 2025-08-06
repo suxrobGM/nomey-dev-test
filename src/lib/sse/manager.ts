@@ -3,6 +3,13 @@ import type { SSEEvent } from "./types";
 
 /**
  * Manages SSE client connections and event broadcasting.
+ *
+ * @example
+ * const client = SSEManager.default.createClient("user-id");
+ * client.startHeartbeat();
+ * SSEManager.default.sendToUser("user-id", { event: "message", data: "Hello!" });
+ * SSEManager.default.broadcast({ event: "global", data: "Broadcast message" });
+ * client.close();
  */
 export class SSEManager {
   private static defaultInstance: SSEManager;
