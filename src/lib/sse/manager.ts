@@ -1,4 +1,4 @@
-import type { SSEClient } from "./client";
+import { SSEClient } from "./client";
 import type { SSEEvent } from "./types";
 
 /**
@@ -6,8 +6,12 @@ import type { SSEEvent } from "./types";
  */
 export class SSEManager {
   private static defaultInstance: SSEManager;
-  private readonly clients = new Map<string, SSEClient>(); // clientId -> SSEClient
-  private readonly clientIdsByUser = new Map<string, Set<string>>(); // userId -> Set of clientIds
+
+  // clientId -> client
+  private readonly clientsById = new Map<string, SSEClient>();
+
+  // userId -> set of clientIds
+  private readonly clientIdsByUser = new Map<string, Set<string>>();
 
   /**
    * Get the default singleton instance.
@@ -20,22 +24,30 @@ export class SSEManager {
   }
 
   /**
-   * Add a new client connection.
-   * @param client The SSE client to add.
+   * Create a new SSE client for a user.
+   * @param userId The ID of the user to create the client for.
+   * @returns A new SSEClient instance.
+   */
+  createClient(userId: string): SSEClient {
+    const client = new SSEClient(userId);
+    this.addClient(client);
+    return client;
+  }
+
+  /**
+   * Register an existing client.
+   * @param client An instance of SSEClient to register.
    */
   addClient(client: SSEClient): void {
-    this.clients.set(client.id, client);
-    if (!client.userId) {
-      // If no userId, don't track in user map
-      return;
-    }
+    this.clientsById.set(client.id, client);
 
-    // Add to user map if not present
-    if (!this.clientIdsByUser.has(client.userId)) {
-      this.clientIdsByUser.set(client.userId, new Set());
+    let set = this.clientIdsByUser.get(client.userId);
+    if (!set) {
+      set = new Set<string>();
+      this.clientIdsByUser.set(client.userId, set);
     }
-
-    this.clientIdsByUser.get(client.userId)!.add(client.id);
+    set.add(client.id);
+    console.log(`SSE client added: ${client.id}, user: ${client.userId}`);
   }
 
   /**
@@ -43,26 +55,23 @@ export class SSEManager {
    * @param clientId The ID of the client to remove.
    */
   async removeClient(clientId: string): Promise<void> {
-    const client = this.clients.get(clientId);
+    const client = this.clientsById.get(clientId);
     if (!client) {
       return;
     }
 
-    this.clients.delete(clientId);
+    // Clean indexes first
+    this.clientsById.delete(clientId);
 
-    if (client.userId) {
-      const set = this.clientIdsByUser.get(client.userId);
-      if (set) {
-        set.delete(clientId);
-
-        if (set.size === 0) {
-          this.clientIdsByUser.delete(client.userId);
-        }
-      }
+    const set = this.clientIdsByUser.get(client.userId);
+    if (set) {
+      set.delete(clientId);
+      if (set.size === 0) this.clientIdsByUser.delete(client.userId);
     }
 
-    // close the writer to clean up the stream
+    // Close the stream last
     await client.close();
+    console.log(`SSE client removed: ${clientId}`);
   }
 
   /**
@@ -71,32 +80,44 @@ export class SSEManager {
    * @param ms The interval in milliseconds for the heartbeat. Defaults to 15000.
    */
   startHeartbeat(clientId: string, ms = 15000): void {
-    this.clients.get(clientId)?.startHeartbeat(ms);
+    this.clientsById.get(clientId)?.startHeartbeat(ms);
+    console.log(`Heartbeat started for client: ${clientId}`);
   }
 
   /**
-   * Send an event to a specific client.
+   * Send an event to the specified client.
    * @param clientId The ID of the client to send the event to.
    * @param event The SSE event to send.
-   * @returns A promise that resolves when the event has been sent.
+   * @returns A promise that resolves when the client has been notified.
    */
   async sendToClient(clientId: string, event: SSEEvent): Promise<void> {
-    await this.clients.get(clientId)?.send(event);
-  }
-
-  /**
-   * Send an event to all connections of a specific user.
-   * @param userId The ID of the user to send the event to.
-   * @param event The SSE event to send.
-   * @returns A promise that resolves when all user's clients have been notified.
-   */
-  async sendToUser(userId: string, event: SSEEvent): Promise<void> {
-    const ids = this.clientIdsByUser.get(userId);
-    if (!ids) {
+    const client = this.clientsById.get(clientId);
+    if (!client) {
       return;
     }
 
-    await Promise.all([...ids].map((cid) => this.sendToClient(cid, event)));
+    await client.send(event);
+    console.log(`Event sent to client: ${clientId}, event: ${event.event}`);
+  }
+
+  /**
+   * Send an event to all clients associated with a user.
+   * @param userId The ID of the user to send the event to.
+   * @param event The SSE event to send.
+   * @returns A promise that resolves when all clients have been notified.
+   */
+  async sendToUser(userId: string, event: SSEEvent): Promise<void> {
+    const ids = this.clientIdsByUser.get(userId);
+    if (!ids?.size) {
+      console.warn(`No clients found for user ID: ${userId}`);
+      return;
+    }
+
+    await Promise.all(
+      [...ids].map((cid) => this.clientsById.get(cid)?.send(event)),
+    );
+
+    console.log(`Event sent to user: ${userId}, event: ${event.event}`);
   }
 
   /**
@@ -105,7 +126,8 @@ export class SSEManager {
    * @returns A promise that resolves when all clients have been notified.
    */
   async broadcast(event: SSEEvent): Promise<void> {
-    await Promise.all([...this.clients.values()].map((c) => c.send(event)));
+    await Promise.all([...this.clientsById.values()].map((c) => c.send(event)));
+    console.log(`Broadcast event: ${event.event}, data:`, event.data);
   }
 
   /**
@@ -113,12 +135,12 @@ export class SSEManager {
    * @returns The count of connected clients.
    */
   clientsCount(): number {
-    return this.clients.size;
+    return this.clientsById.size;
   }
 
   /**
-   * Get the number of connected users.
-   * @returns The count of connected users.
+   * Get the number of unique users with connected clients.
+   * @returns The count of unique users.
    */
   usersCount(): number {
     return this.clientIdsByUser.size;

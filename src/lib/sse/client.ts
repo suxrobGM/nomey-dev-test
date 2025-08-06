@@ -16,24 +16,23 @@ export class SSEClient {
   /** Unique identifier for this SSE client */
   public readonly id = crypto.randomUUID();
 
-  /** Optional user ID associated with this client */
-  public readonly userId: string | null;
+  /** User ID associated with this client */
+  public readonly userId: string;
 
   /** Readable stream for this client's SSE messages */
-  public readonly readable = new ReadableStream<Uint8Array>();
+  public readonly readable: ReadableStream<Uint8Array>;
 
   //#endregion
 
   /**
    * Creates a new SSE client.
-   * @param userId Optional user ID associated with this client.
+   * @param userId User ID associated with this client.
    */
-  constructor(userId?: string | null) {
+  constructor(userId: string) {
     const stream = new TransformStream<Uint8Array, Uint8Array>();
-    const writer = stream.writable.getWriter();
 
-    this.userId = userId ?? null;
-    this.writer = writer;
+    this.userId = userId;
+    this.writer = stream.writable.getWriter();
     this.readable = stream.readable;
   }
 
@@ -44,6 +43,7 @@ export class SSEClient {
    * @returns A promise that resolves when the event has been sent.
    */
   send<T = unknown>(evt: SSEEvent<T>): Promise<void> {
+    console.log(`Sending event to client ${this.id}:`, evt);
     return this.writeRaw(this.formatMessage(evt));
   }
 
@@ -62,8 +62,14 @@ export class SSEClient {
    */
   startHeartbeat(ms = 15000): void {
     this.stopHeartbeat();
+    console.log(
+      `Starting heartbeat for client ${this.id} with interval ${ms}ms`,
+    );
+
     this.heartbeat = setInterval(() => {
-      this.ping().catch(() => this.close());
+      this.ping()
+        .then(() => console.log(`Heartbeat ping sent for client ${this.id}`))
+        .catch(() => this.close());
     }, ms);
   }
 
@@ -76,6 +82,7 @@ export class SSEClient {
       clearInterval(this.heartbeat);
     }
     this.heartbeat = null;
+    console.log(`Heartbeat stopped for client ${this.id}`);
   }
 
   /**
@@ -103,6 +110,8 @@ export class SSEClient {
     } catch {
       // already closed/aborted
     }
+
+    console.log(`SSE client connection closed: ${this.id}`);
   }
 
   /**

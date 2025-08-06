@@ -53,6 +53,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         clients: SSEManager.default.clientsCount(),
         users: SSEManager.default.usersCount(),
       },
+      message: `Event '${body.event}' sent successfully`,
     });
   } catch (e) {
     console.error("SSE emit error", e);

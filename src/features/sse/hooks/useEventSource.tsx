@@ -118,6 +118,7 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
     destroyedRef.current = true;
     cleanup();
     setState((s) => ({ ...s, connected: false, readyState: 2 })); // CLOSED
+    console.log("EventSource disconnected");
   };
 
   const scheduleReconnect = () => {
@@ -134,13 +135,23 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
       initialDelayMs * Math.pow(2, retryRef.current),
       maxDelayMs,
     );
+
     retryRef.current += 1;
     timerRef.current = setTimeout(() => {
       connect(); // try again
     }, delay);
+
+    console.log(
+      `Reconnecting in ${delay}ms (attempt ${retryRef.current + 1}/${maxRetries})`,
+    );
   };
 
   const connect = () => {
+    if (eventSourceRef.current?.readyState === EventSource.OPEN) {
+      console.warn("EventSource is already connected");
+      return;
+    }
+
     console.log("Connecting to SSE:", url);
 
     destroyedRef.current = false;
@@ -151,14 +162,14 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
 
     eventSource.onopen = () => {
       retryRef.current = 0;
-      console.log("EventSource opened:", url);
+      console.log("EventSource opened, readyState:", eventSource.readyState);
 
       setState((s) => ({ ...s, connected: true, readyState: 1, error: null }));
       on?.open?.();
     };
 
     eventSource.onerror = (e) => {
-      console.log("EventSource error:", e);
+      console.error("EventSource error:", e);
 
       setState((s) => ({
         ...s,
@@ -174,10 +185,9 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
       }
     };
 
-    // Default unnamed messages
     eventSource.onmessage = (ev) => {
       const data = parse(ev.data as string);
-      console.log("Received unnamed event:", data);
+      console.log("Received SSE message:", ev);
 
       setState((s) => ({
         ...s,
@@ -196,6 +206,8 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
         }
 
         eventSource.addEventListener(name, (ev) => {
+          console.log(`Received event: ${name}`, ev);
+
           const data = parse(ev.data as string);
           setState((s) => ({
             ...s,
@@ -206,6 +218,8 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
           // @ts-expect-error generic indexing into on
           on[name]?.(data, ev);
         });
+
+        console.log(`Listening for SSE event: ${name}`);
       });
     }
   };

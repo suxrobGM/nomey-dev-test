@@ -5,15 +5,25 @@ import { Button } from "@/shared/components/ui/button";
 import type { ReactElement } from "react";
 
 interface SSEDemoProps {
-  userId?: string;
+  userId: string;
 }
 
 export function SSEDemo(props: SSEDemoProps): ReactElement {
   const { userId } = props;
-  const { state, connect, disconnect } = useEventSource(
-    `/api/sse${userId ? `?user_id=${userId}` : ""}`,
-    { enabled: false },
-  );
+  const { state, connect, disconnect } = useEventSource(`/api/sse/${userId}`, {
+    enabled: false,
+    on: {
+      open: () => {
+        console.log(`SSE connection opened`);
+      },
+      message: (data) => {
+        console.log(`Received SSE message:`, data);
+      },
+      connected: (data) => {
+        console.log(`SSE connected:`, data);
+      },
+    },
+  });
 
   return (
     <div className="flex flex-col items-center gap-4 p-4">

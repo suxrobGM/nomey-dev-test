@@ -3,7 +3,7 @@
  */
 export interface SSEEvent<T = unknown> {
   /** The type of event. */
-  event: string;
+  event?: string;
   /** The data payload of the event. */
   data?: T;
   /** The ID of the event for reconnection purposes. */
