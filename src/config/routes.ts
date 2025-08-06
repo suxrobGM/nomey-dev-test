@@ -1,4 +1,5 @@
 import type { RouteData } from "@/types/routes";
+import { sse } from "@trpc/server";
 
 /**
  * Route Config
@@ -31,6 +32,7 @@ export const paths = {
   landingPage: "/",
   homePage: "/home",
   reelsUploadPage: "/reels/upload",
+  ssePage: "/sse",
 } as const;
 
 // ⚠️ DEFINE METADATA FOR NEW ROUTES HERE ⚠️
@@ -49,6 +51,11 @@ export const routes: Record<keyof typeof paths, RouteData> = {
   reelsUploadPage: {
     name: "Reels Upload Page",
     path: paths.reelsUploadPage,
+    accessType: "protected",
+  },
+  ssePage: {
+    name: "SSE Page",
+    path: paths.ssePage,
     accessType: "protected",
   },
 };

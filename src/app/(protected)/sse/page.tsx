@@ -1,5 +1,15 @@
 import type { ReactElement } from "react";
+import { SSEDemo } from "./components/SSEDemo";
 
-export default function SseDemoPage(): ReactElement {
-  return <div>SSE Demo Page</div>;
+interface SSEDemoPageProps {
+  searchParams: Promise<{ user_id?: string }>;
+}
+
+export default async function SSEDemoPage(
+  props: SSEDemoPageProps,
+): Promise<ReactElement> {
+  const { searchParams } = props;
+  const { user_id } = await searchParams;
+
+  return <SSEDemo userId={user_id} />;
 }

@@ -1,14 +1,13 @@
-import { formatSSE } from "./format";
-import type { SSEClient, SSEEvent } from "./types";
+import type { SSEClient } from "./client";
+import type { SSEEvent } from "./types";
 
 /**
  * Manages SSE client connections and event broadcasting.
  */
 export class SSEManager {
   private static defaultInstance: SSEManager;
-  private readonly clientsById = new Map<string, SSEClient>();
-  private readonly clientIdsByUser = new Map<string, Set<string>>(); // Track active user connections per client
-  private readonly encoder = new TextEncoder();
+  private readonly clients = new Map<string, SSEClient>(); // clientId -> SSEClient
+  private readonly clientIdsByUser = new Map<string, Set<string>>(); // userId -> Set of clientIds
 
   /**
    * Get the default singleton instance.
@@ -25,7 +24,7 @@ export class SSEManager {
    * @param client The SSE client to add.
    */
   addClient(client: SSEClient): void {
-    this.clientsById.set(client.clientId, client);
+    this.clients.set(client.id, client);
     if (!client.userId) {
       // If no userId, don't track in user map
       return;
@@ -36,38 +35,34 @@ export class SSEManager {
       this.clientIdsByUser.set(client.userId, new Set());
     }
 
-    this.clientIdsByUser.get(client.userId)!.add(client.clientId);
+    this.clientIdsByUser.get(client.userId)!.add(client.id);
   }
 
   /**
    * Remove a client connection.
    * @param clientId The ID of the client to remove.
    */
-  removeClient(clientId: string): void {
-    const client = this.clientsById.get(clientId);
+  async removeClient(clientId: string): Promise<void> {
+    const client = this.clients.get(clientId);
     if (!client) {
       return;
     }
 
-    // Clear heartbeat if it exists
-    if (client.heartbeat) {
-      clearInterval(client.heartbeat);
-    }
-    this.clientsById.delete(clientId); // then client from map
+    this.clients.delete(clientId);
 
-    if (!client.userId) {
-      return;
-    }
+    if (client.userId) {
+      const set = this.clientIdsByUser.get(client.userId);
+      if (set) {
+        set.delete(clientId);
 
-    // Now remove from user map
-    const set = this.clientIdsByUser.get(client.userId);
-    if (set) {
-      set.delete(clientId);
-
-      if (set.size === 0) {
-        this.clientIdsByUser.delete(client.userId);
+        if (set.size === 0) {
+          this.clientIdsByUser.delete(client.userId);
+        }
       }
     }
+
+    // close the writer to clean up the stream
+    await client.close();
   }
 
   /**
@@ -76,21 +71,7 @@ export class SSEManager {
    * @param ms The interval in milliseconds for the heartbeat. Defaults to 15000.
    */
   startHeartbeat(clientId: string, ms = 15000): void {
-    const client = this.clientsById.get(clientId);
-    if (!client) {
-      return;
-    }
-
-    if (client.heartbeat) {
-      clearInterval(client.heartbeat);
-    }
-
-    // Set up a heartbeat to keep the connection alive
-    client.heartbeat = setInterval(() => {
-      client.writer
-        .write(this.encoder.encode(`: ping ${Date.now()}\n\n`))
-        .catch(() => this.removeClient(clientId));
-    }, ms);
+    this.clients.get(clientId)?.startHeartbeat(ms);
   }
 
   /**
@@ -100,16 +81,7 @@ export class SSEManager {
    * @returns A promise that resolves when the event has been sent.
    */
   async sendToClient(clientId: string, event: SSEEvent): Promise<void> {
-    const client = this.clientsById.get(clientId);
-    if (!client) {
-      return;
-    }
-
-    try {
-      await client.writer.write(formatSSE(event));
-    } catch {
-      this.removeClient(clientId);
-    }
+    await this.clients.get(clientId)?.send(event);
   }
 
   /**
@@ -124,9 +96,7 @@ export class SSEManager {
       return;
     }
 
-    await Promise.all(
-      Array.from(ids).map((cid) => this.sendToClient(cid, event)),
-    );
+    await Promise.all([...ids].map((cid) => this.sendToClient(cid, event)));
   }
 
   /**
@@ -135,11 +105,7 @@ export class SSEManager {
    * @returns A promise that resolves when all clients have been notified.
    */
   async broadcast(event: SSEEvent): Promise<void> {
-    await Promise.all(
-      Array.from(this.clientsById.keys()).map((cid) =>
-        this.sendToClient(cid, event),
-      ),
-    );
+    await Promise.all([...this.clients.values()].map((c) => c.send(event)));
   }
 
   /**
@@ -147,7 +113,7 @@ export class SSEManager {
    * @returns The count of connected clients.
    */
   clientsCount(): number {
-    return this.clientsById.size;
+    return this.clients.size;
   }
 
   /**

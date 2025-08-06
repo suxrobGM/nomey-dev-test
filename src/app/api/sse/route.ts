@@ -1,18 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SSEManager, formatSSE, comment } from "@/lib/sse";
-import * as crypto from "crypto";
+import { SSEManager, SSEClient } from "@/lib/sse";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(req.url);
-  const userId = searchParams.get("userId");
-  const clientId = crypto.randomUUID();
-
-  const stream = new TransformStream<Uint8Array, Uint8Array>();
-  const writer = stream.writable.getWriter();
+  const userId = searchParams.get("user_id");
 
   // Register and start heartbeat
-  SSEManager.default.addClient({ clientId, userId, writer });
-  SSEManager.default.startHeartbeat(clientId, 15000);
+  const client = new SSEClient(userId);
+  SSEManager.default.addClient(client);
+  SSEManager.default.startHeartbeat(client.id, 15000);
 
   const headers = new Headers({
     "Content-Type": "text/event-stream",
@@ -21,24 +17,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     "X-Accel-Buffering": "no",
   });
 
+  console.log(`SSE client connected: ${client.id}, user: ${userId}`);
+
   // Send initial handshake
-  await writer.write(comment(`connected ${clientId}`));
-  await writer.write(
-    formatSSE({ event: "connected", data: { clientId, userId } }),
-  );
-
-  // Handle client disconnect via AbortSignal
-  const abort = req.signal;
-
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises
-  abort.addEventListener("abort", async () => {
-    try {
-      SSEManager.default.removeClient(clientId);
-      await writer.close();
-    } catch {
-      // already closed
-    }
+  await client.send({
+    event: "connected",
+    data: { clientId: client.id, userId },
   });
 
-  return new NextResponse(stream.readable, { headers, status: 200 });
+  req.signal.addEventListener("abort", () => {
+    SSEManager.default
+      .removeClient(client.id)
+      .then(() => console.log(`SSE disconnected: ${client.id}`))
+      .catch((err) => console.error(`Error removing SSE client: ${err}`));
+  });
+
+  return new NextResponse(client.readable, { headers, status: 200 });
 }
