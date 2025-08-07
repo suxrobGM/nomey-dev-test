@@ -6,6 +6,30 @@ Unlike traditional SSE implementations that rely on string-based event handling,
 
 The implementation is designed for production use with features like automatic client cleanup, per-user broadcasting, and robust error handling. It supports both individual client targeting and broadcast messaging, making it suitable for applications ranging from simple notifications to complex real-time collaboration features.
 
+## Features
+
+### Type Safety
+
+- **Compile-time validation** of all events across server and client
+- **IntelliSense support** with full autocompletion for event names and payloads
+- **Runtime error elimination** from typos or mismatched data structures
+
+### Server-side Capabilities
+
+- **Connection Management**: Automatic client registration, cleanup, and pooling
+- **Broadcasting Options**: Send to all clients, specific users, or individual tabs/devices
+- **Heartbeat System**: Configurable keep-alive mechanism (15s default) for proxy compatibility
+- **User Association**: Group multiple client connections per user for targeted messaging
+- **Framework Agnostic**: Server-side code works with any Node.js framework
+
+### Client-side Features
+
+- **React Hook Integration**: Purpose-built `useEventSource` hook for seamless React integration
+- **Automatic Reconnection**: Intelligent retry logic with exponential backoff
+- **Connection State Management**: Real-time status updates and error reporting
+- **Flexible URL Construction**: Support for query parameters and dynamic endpoint building
+- **Custom Data Parsing**: Configurable JSON parsing with fallback handling
+
 | Layer                | Runtime         | Description                                                                         |
 | -------------------- | --------------- | ----------------------------------------------------------------------------------- |
 | **`lib/sse/server`** | Node / Edge     | `SSEManager` & `SSEClient` — typed fan-out, per-user or per-tab, heartbeat, cleanup |

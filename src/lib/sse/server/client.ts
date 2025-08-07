@@ -13,6 +13,9 @@ export interface SSEClientOptions {
 /**
  * Represents a Server-Sent Events (SSE) client.
  * This class manages the connection, sending events, and handling heartbeats.
+ *
+ * @template TEvents The type of events to infer when sending messages.
+ * This allows for strongly-typed event handling.
  */
 export class SSEClient<TEvents extends EventMap = EventMap> {
   private readonly writer: WritableStreamDefaultWriter<Uint8Array>;

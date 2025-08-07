@@ -6,7 +6,7 @@ import type { ServerEvent } from "./types";
  * Manages SSE client connections and event broadcasting.
  *
  * @example
- * const client = SSEManager.default.createClient("user-id");
+ * const client = SSEManager.default.createClient({ userId: "user-id" });
  * client.startHeartbeat();
  * SSEManager.default.sendToUser("user-id", { event: "message", data: "Hello!" });
  * SSEManager.default.broadcast({ event: "global", data: "Broadcast message" });
@@ -34,6 +34,7 @@ export class SSEManager {
   /**
    * Create a new SSE client for a user.
    * @param options Options for the SSE client.
+   * @template TEvents The type of events to infer when sending messages.
    * @returns A new SSEClient instance.
    */
   createClient<TEvents extends EventMap = EventMap>(
@@ -47,6 +48,7 @@ export class SSEManager {
   /**
    * Register an existing client.
    * @param client An instance of SSEClient to register.
+   * @template TEvents The type of events to infer when sending messages.
    */
   addClient<TEvents extends EventMap = EventMap>(
     client: SSEClient<TEvents>,
@@ -106,6 +108,7 @@ export class SSEManager {
    * Send an event to the specified client.
    * @param clientId The ID of the client to send the event to.
    * @param event The SSE event to send.
+   * @template TEvents The type of events to infer payload structure.
    * @returns A promise that resolves when the client has been notified.
    */
   async sendToClient<TEvents extends EventMap = EventMap>(
@@ -127,6 +130,7 @@ export class SSEManager {
    * Send an event to all clients associated with a user.
    * @param userId The ID of the user to send the event to.
    * @param event The SSE event to send.
+   * @template TEvents The type of events to infer payload structure.
    * @returns A promise that resolves when all clients have been notified.
    */
   async sendToUser<TEvents extends EventMap = EventMap>(
@@ -153,6 +157,7 @@ export class SSEManager {
   /**
    * Broadcast an event to all connected clients.
    * @param event The SSE event to broadcast.
+   * @template TEvents The type of events to infer payload structure.
    * @returns A promise that resolves when all clients have been notified.
    */
   async broadcast<TEvents extends EventMap = EventMap>(
