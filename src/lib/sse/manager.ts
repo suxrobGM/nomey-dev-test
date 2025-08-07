@@ -1,4 +1,4 @@
-import { SSEClient } from "./client";
+import { SSEClient, type SSEClientOptions } from "./client";
 import type { SSEEvent } from "./types";
 
 /**
@@ -32,11 +32,11 @@ export class SSEManager {
 
   /**
    * Create a new SSE client for a user.
-   * @param userId The ID of the user to create the client for.
+   * @param options Options for the SSE client.
    * @returns A new SSEClient instance.
    */
-  createClient(userId: string): SSEClient {
-    const client = new SSEClient(userId);
+  createClient(sseOptions?: SSEClientOptions): SSEClient {
+    const client = new SSEClient(sseOptions);
     this.addClient(client);
     return client;
   }
@@ -48,12 +48,16 @@ export class SSEManager {
   addClient(client: SSEClient): void {
     this.clientsById.set(client.id, client);
 
-    let set = this.clientIdsByUser.get(client.userId);
-    if (!set) {
-      set = new Set<string>();
-      this.clientIdsByUser.set(client.userId, set);
+    // If client has a userId, add it to the user index
+    if (client.userId) {
+      let set = this.clientIdsByUser.get(client.userId);
+      if (!set) {
+        set = new Set<string>();
+        this.clientIdsByUser.set(client.userId, set);
+      }
+      set.add(client.id);
     }
-    set.add(client.id);
+
     console.log(`SSE client added: ${client.id}, user: ${client.userId}`);
   }
 
@@ -70,10 +74,12 @@ export class SSEManager {
     // Clean indexes first
     this.clientsById.delete(clientId);
 
-    const set = this.clientIdsByUser.get(client.userId);
-    if (set) {
-      set.delete(clientId);
-      if (set.size === 0) this.clientIdsByUser.delete(client.userId);
+    if (client.userId) {
+      const set = this.clientIdsByUser.get(client.userId);
+      if (set) {
+        set.delete(clientId);
+        if (set.size === 0) this.clientIdsByUser.delete(client.userId);
+      }
     }
 
     // Close the stream last

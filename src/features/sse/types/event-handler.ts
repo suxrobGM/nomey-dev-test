@@ -4,7 +4,7 @@ export type EventMap = Record<string, unknown>;
 /** Standard reserved events that are not user-defined */
 type ReservedEvents = "open" | "error" | "message";
 
-/** Extract event names as string literals from an EventMap */
+/** Extract event names as string literals from an EventMap and reserved events */
 export type EventKey<T extends EventMap> =
   | (Exclude<keyof T, ReservedEvents> & string)
   | ReservedEvents;

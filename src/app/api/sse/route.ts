@@ -1,24 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SSEManager } from "@/lib/sse";
 
-interface Params {
-  params: Promise<{ userId: string }>;
-}
-
 const sseHeaders = {
   "Content-Type": "text/event-stream",
   "Cache-Control": "no-cache, no-transform",
   Connection: "keep-alive",
 };
 
-export async function GET(
-  req: NextRequest,
-  { params }: Params,
-): Promise<NextResponse> {
-  const { userId } = await params;
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  const searchParams = req.nextUrl.searchParams;
+  const userId = searchParams.get("user_id");
 
   // Register and start heartbeat
-  const client = SSEManager.default.createClient(userId);
+  const client = SSEManager.default.createClient({ userId });
   client.startHeartbeat();
 
   console.log(`SSE client connected: ${client.id}, user ID: ${userId}`);

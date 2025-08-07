@@ -41,7 +41,7 @@ interface UseEventSourceOptions {
 }
 
 /**
- * Response type for the useEventSource hook.
+ * Return type for the useEventSource hook.
  */
 interface UseEventSourceReturn<TEvents extends EventMap> {
   /** Current SSE connection state */

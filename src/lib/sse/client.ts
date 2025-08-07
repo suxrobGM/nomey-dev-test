@@ -2,6 +2,14 @@ import * as crypto from "crypto";
 import type { SSEEvent } from "./types";
 
 /**
+ * Options for the SSE client.
+ */
+export interface SSEClientOptions {
+  /** Optional user ID associated with this client */
+  userId?: string | null;
+}
+
+/**
  * Represents a Server-Sent Events (SSE) client.
  * This class manages the connection, sending events, and handling heartbeats.
  */
@@ -16,8 +24,8 @@ export class SSEClient {
   /** Unique identifier for this SSE client */
   public readonly id = crypto.randomUUID();
 
-  /** User ID associated with this client */
-  public readonly userId: string;
+  /** Optional user ID associated with this client */
+  public readonly userId: string | null = null;
 
   /** Readable stream for this client's SSE messages */
   public readonly readable: ReadableStream<Uint8Array>;
@@ -26,12 +34,12 @@ export class SSEClient {
 
   /**
    * Creates a new SSE client.
-   * @param userId User ID associated with this client.
+   * @param options Options for the SSE client.
    */
-  constructor(userId: string) {
+  constructor(options?: SSEClientOptions) {
     const stream = new TransformStream<Uint8Array, Uint8Array>();
 
-    this.userId = userId;
+    this.userId = options?.userId ?? null;
     this.writer = stream.writable.getWriter();
     this.readable = stream.readable;
   }

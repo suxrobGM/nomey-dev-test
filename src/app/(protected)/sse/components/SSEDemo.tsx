@@ -5,13 +5,13 @@ import { Button } from "@/shared/components/ui/button";
 import { useEffect, type ReactElement } from "react";
 
 interface SSEDemoProps {
-  userId: string;
+  userId?: string;
 }
 
 export function SSEDemo(props: SSEDemoProps): ReactElement {
   const { userId } = props;
   const { state, connect, disconnect, subscribe } = useEventSource<SSEvents>(
-    `/api/sse/${userId}`,
+    `/api/sse${userId ? `?user_id=${userId}` : ""}`,
   );
 
   useEffect(() => {
