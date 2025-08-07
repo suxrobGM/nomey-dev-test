@@ -61,13 +61,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { SSEManager } from "@/lib/sse/server";
 import type { SSEvents } from "@/types/events";
 
-const HEADERS = {
+const sseHeaders = {
   "Content-Type": "text/event-stream",
   "Cache-Control": "no-cache, no-transform",
   Connection: "keep-alive",
 };
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   const userId = req.nextUrl.searchParams.get("user_id");
 
   // 1) Register client
@@ -87,7 +87,10 @@ export async function GET(req: NextRequest) {
     SSEManager.default.removeClient(client.id),
   );
 
-  return new NextResponse(client.readable, { status: 200, headers: HEADERS });
+  return new NextResponse(client.readable, {
+    status: 200,
+    headers: sseHeaders,
+  });
 }
 ```
 
@@ -99,10 +102,11 @@ There is a React hook `useEventSource` that you can use to consume the SSE event
 
 ```tsx
 "use client";
+import { ReactElement, useEffect } from "react";
 import { useEventSource } from "@/lib/sse/client";
 import type { SSEvents } from "@/types/events";
 
-export function Notifications({ userId }: { userId?: string }) {
+export function Notifications({ userId }: { userId?: string }): ReactElement {
   const { state, subscribe } = useEventSource<SSEvents>(
     "/api/sse",
     { enabled: true }, // auto-connect
@@ -378,17 +382,6 @@ function MyComponent() {
   );
 }
 ```
-
-### Options for the `useEventSource` hook
-
-| Option                     | Default            | Description                  |
-| -------------------------- | ------------------ | ---------------------------- |
-| `enabled`                  | `false`            | Auto-connect on mount        |
-| `withCredentials`          | `false`            | Include cookies              |
-| `reconnect.initialDelayMs` | `1 000`            | First back-off               |
-| `reconnect.maxDelayMs`     | `15 000`           | Max back-off                 |
-| `reconnect.maxRetries`     | `10`               | Max retries                  |
-| `parse`                    | default JSON.parse | Custom parser for event data |
 
 ---
 
