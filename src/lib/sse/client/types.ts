@@ -1,5 +1,4 @@
-/** Generic event map: event name -> payload type */
-export type EventMap = Record<string, unknown>;
+import type { EventMap } from "../shared/types";
 
 /** Standard reserved events that are not user-defined */
 type ReservedEvents = "open" | "error" | "message";

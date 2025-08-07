@@ -1,6 +1,6 @@
 import * as crypto from "crypto";
 import type { ServerEvent } from "./types";
-import type { EventMap } from "../client/types";
+import type { EventMap } from "../shared/types";
 
 /**
  * Options for the SSE client.

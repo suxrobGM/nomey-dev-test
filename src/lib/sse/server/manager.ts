@@ -1,4 +1,4 @@
-import type { EventMap } from "../client/types";
+import type { EventMap } from "../shared/types";
 import { SSEClient, type SSEClientOptions } from "./client";
 import type { ServerEvent } from "./types";
 

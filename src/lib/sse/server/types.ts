@@ -1,4 +1,4 @@
-import type { EventMap } from "../client/types";
+import type { EventMap } from "../shared/types";
 
 // SSE reserved event names
 type ReservedServerEvents = "message";

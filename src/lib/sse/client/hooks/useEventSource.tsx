@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
-  EventMap,
   EventSourceState,
   EventReadyState,
   AnyHandler,
@@ -18,6 +17,7 @@ import type {
   UseEventSourceReturn,
 } from "../types";
 import { buildUrl, isReservedEvent, safeParseJson } from "../utils";
+import type { EventMap } from "@/lib/sse/shared/types";
 
 /**
  * Hook to manage a Server-Sent Events (SSE) connection and state.
