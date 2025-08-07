@@ -1,28 +1,38 @@
 /** Generic event map: event name -> payload type */
 export type EventMap = Record<string, unknown>;
 
-/** Parser type for event.data */
-export type EventDataParser = (raw: string) => unknown;
-
-/** Built-in (“reserved”) event handlers that aren't SSE named events */
-export interface BaseEventHandlers {
-  open?: () => void;
-  error?: (e: Event) => void;
-  /** Fires for default/unnamed SSE frames (no `event:` line) */
-  message?: (data: unknown, ev: MessageEvent) => void;
-}
-
 /** Standard reserved events that are not user-defined */
-export type ReservedEvents = "open" | "error" | "message";
+type ReservedEvents = "open" | "error" | "message";
 
-/** Typed handlers for your named SSE events */
-export type NamedEventHandlers<TEvents extends EventMap> = {
-  [K in Exclude<keyof TEvents, ReservedEvents>]?: (
-    data: TEvents[K],
-    ev: MessageEvent,
-  ) => void;
+/** Extract event names as string literals from an EventMap */
+export type EventKey<T extends EventMap> =
+  | (Exclude<keyof T, ReservedEvents> & string)
+  | ReservedEvents;
+
+export type OpenHandler = () => void;
+export type ErrorHandler = (e: Event) => void;
+export type MessageHandler = (data: unknown, ev: MessageEvent) => void;
+export type NamedHandler<T> = (data: T, ev: MessageEvent) => void;
+
+// prettier-ignore
+export type AnyHandler<TEvents extends EventMap, K extends string> =
+  K extends "open" ? OpenHandler :
+  K extends "error" ? ErrorHandler :
+  K extends "message" ? MessageHandler :
+  K extends keyof TEvents ? NamedHandler<TEvents[K]> :
+  never;
+
+export type UnsubscribeFn = () => void;
+
+export type SubscribeFn<TEvents extends EventMap> = {
+  // Named events
+  <K extends EventKey<TEvents>>(
+    event: K,
+    handler: NamedHandler<TEvents[K]>,
+  ): UnsubscribeFn;
+
+  // Reserved events
+  open: (handler: OpenHandler) => UnsubscribeFn;
+  error: (handler: ErrorHandler) => UnsubscribeFn;
+  message: (handler: MessageHandler) => UnsubscribeFn;
 };
-
-/** Combined event handlers: standard + named */
-export type EventSourceHandlers<TEvents extends EventMap> = BaseEventHandlers &
-  NamedEventHandlers<TEvents>;
