@@ -1,20 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { SSEManager } from "@/lib/sse";
+import { SSEManager } from "@/lib/sse/server";
 
 type Body =
-  | { kind: "broadcast"; event: string; payload: unknown; id?: string }
+  | {
+      kind: "broadcast";
+      event: string;
+      payload: Record<string, unknown>;
+      id?: string;
+    }
   | {
       kind: "user";
       userId: string;
       event: string;
-      payload: unknown;
+      payload: Record<string, unknown>;
       id?: string;
     }
   | {
       kind: "client";
       clientId: string;
       event: string;
-      payload: unknown;
+      payload: Record<string, unknown>;
       id?: string;
     };
 

@@ -16,8 +16,8 @@ import type {
   UrlOptions,
   UseEventSourceOptions,
   UseEventSourceReturn,
-} from "./types";
-import { buildUrl, isReservedEvent, safeParseJson } from "./utils";
+} from "../types";
+import { buildUrl, isReservedEvent, safeParseJson } from "../utils";
 
 /**
  * Hook to manage a Server-Sent Events (SSE) connection and state.
@@ -148,7 +148,6 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
 
       eventSourceRef.current.addEventListener(name, dispatch);
       dispatchersRef.current.set(name, dispatch);
-      console.log(`Attached named listener for "${name}"`);
     },
     [emit, parse],
   );
@@ -196,7 +195,7 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
         dispatchersRef.current.delete(name);
       };
     },
-    [parse, emit, attachNamedIfNeeded],
+    [attachNamedIfNeeded],
   );
 
   // Build the typed subscribe() function with reserved helpers
@@ -237,7 +236,6 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
     dispatchersRef.current.clear();
     eventSourceRef.current?.close();
     eventSourceRef.current = null;
-    console.log("SSE cleaned up");
   }, []);
 
   const connect = useCallback(() => {
@@ -251,8 +249,6 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
 
     const eventSource = new EventSource(urlString, { withCredentials });
     eventSourceRef.current = eventSource;
-
-    console.log("Connected to SSE:", urlString);
 
     eventSource.onopen = () => {
       retryRef.current = 0;
@@ -291,7 +287,7 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
       }));
       emit("message", data, ev);
     };
-  }, [urlString, withCredentials, cleanup, parse, emit]);
+  }, [urlString, withCredentials, cleanup, parse, emit, attachAllNamed]);
 
   const scheduleReconnect = useCallback(() => {
     if (!reconnectEnabled || destroyedRef.current) {

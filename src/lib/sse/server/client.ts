@@ -1,5 +1,6 @@
 import * as crypto from "crypto";
-import type { SSEEvent } from "./types";
+import type { ServerEvent } from "./types";
+import type { EventMap } from "../client/types";
 
 /**
  * Options for the SSE client.
@@ -13,7 +14,7 @@ export interface SSEClientOptions {
  * Represents a Server-Sent Events (SSE) client.
  * This class manages the connection, sending events, and handling heartbeats.
  */
-export class SSEClient {
+export class SSEClient<TEvents extends EventMap = EventMap> {
   private readonly writer: WritableStreamDefaultWriter<Uint8Array>;
   private readonly encoder = new TextEncoder();
   private heartbeat: NodeJS.Timeout | null = null;
@@ -50,7 +51,7 @@ export class SSEClient {
    * @param evt The SSE event to send.
    * @returns A promise that resolves when the event has been sent.
    */
-  send<T = unknown>(evt: SSEEvent<T>): Promise<void> {
+  send(evt: ServerEvent<TEvents>): Promise<void> {
     console.log(`Sending event to client ${this.id}:`, evt);
     return this.writeRaw(this.formatMessage(evt));
   }
@@ -144,12 +145,12 @@ export class SSEClient {
    * @param sseEvent The SSE event object to format.
    * @returns The formatted SSE event as a Uint8Array.
    */
-  private formatMessage(sseEvent: SSEEvent): Uint8Array {
+  private formatMessage(sseEvent: ServerEvent<TEvents>): Uint8Array {
     const { event, data, id, retry } = sseEvent;
 
     let chunk = "";
     if (id) chunk += `id: ${id}\n`;
-    if (event) chunk += `event: ${event}\n`;
+    if (event) chunk += `event: ${event as string}\n`;
     if (retry) chunk += `retry: ${retry}\n`;
     if (data !== undefined) {
       const serialized = typeof data === "string" ? data : JSON.stringify(data);

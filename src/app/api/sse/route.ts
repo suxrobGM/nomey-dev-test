@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SSEManager } from "@/lib/sse";
+import { SSEManager } from "@/lib/sse/server";
+import type { SSEvents } from "@/types/events";
 
 const sseHeaders = {
   "Content-Type": "text/event-stream",
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const userId = searchParams.get("user_id");
 
   // Register and start heartbeat
-  const client = SSEManager.default.createClient({ userId });
+  const client = SSEManager.default.createClient<SSEvents>({ userId });
   client.startHeartbeat();
 
   console.log(`SSE client connected: ${client.id}, user ID: ${userId}`);

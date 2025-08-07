@@ -1,6 +1,7 @@
 "use client";
 
-import { useEventSource, type SSEvents } from "@/features/sse";
+import type { SSEvents } from "@/types/events";
+import { useEventSource } from "@/lib/sse/client";
 import { Button } from "@/shared/components/ui/button";
 import {
   useCallback,
@@ -59,6 +60,11 @@ export function SSEDemo(props: SSEDemoProps): ReactElement {
       pushLog("info", "message", { data, lastEventId: ev.lastEventId });
     });
 
+    const offNotification = subscribe("notification", (data) => {
+      console.log("notification event:", data);
+      pushLog("info", "notification", data);
+    });
+
     // Reserved helpers (property form)
     const offOpen = subscribe.open(() => {
       console.log("SSE opened");
@@ -75,6 +81,7 @@ export function SSEDemo(props: SSEDemoProps): ReactElement {
       offMessage();
       offOpen();
       offErr();
+      offNotification();
     };
   }, [subscribe]);
 
@@ -122,6 +129,7 @@ export function SSEDemo(props: SSEDemoProps): ReactElement {
         body: JSON.stringify(body),
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const json = await res.json();
 
       if (!res.ok) {
@@ -243,7 +251,7 @@ export function SSEDemo(props: SSEDemoProps): ReactElement {
               <span className="text-sm font-medium">Target clientId</span>
               <input
                 className="rounded border px-2 py-1"
-                value={customClientId || clientId || ""}
+                value={customClientId ?? clientId ?? ""}
                 onChange={(e) => setCustomClientId(e.target.value)}
                 placeholder="auto-fills when connected"
               />
@@ -305,7 +313,7 @@ export function SSEDemo(props: SSEDemoProps): ReactElement {
           </div>
           {state.error && (
             <div className="text-red-600 sm:col-span-2">
-              <span className="font-medium">error:</span> {String(state.error)}
+              <span className="font-medium">SSE error, see console</span>
             </div>
           )}
         </div>
