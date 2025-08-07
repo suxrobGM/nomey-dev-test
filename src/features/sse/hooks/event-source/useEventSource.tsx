@@ -13,53 +13,11 @@ import type {
   ErrorHandler,
   MessageHandler,
   NamedHandler,
-} from "../types";
-
-/**
- * Options for the useEventSource hook.
- */
-interface UseEventSourceOptions {
-  /** Start immediately (default: false) */
-  enabled?: boolean;
-  /** Pass cookies for same-origin auth if needed */
-  withCredentials?: boolean;
-  /** Optional Last-Event-ID to resume a stream */
-  lastEventId?: string;
-  /** Custom parser for event.data (default: JSON.parse with fallback to string) */
-  parse?: (raw: string) => unknown;
-  /** Auto-reconnect config */
-  reconnect?: {
-    /** Enable automatic reconnection (default: true) */
-    enabled?: boolean;
-    /** Initial delay before reconnecting (default: 1000) */
-    initialDelayMs?: number;
-    /** Maximum delay between reconnect attempts (default: 15000) */
-    maxDelayMs?: number;
-    /** Maximum number of reconnect attempts (default: 10) */
-    maxRetries?: number;
-  };
-}
-
-/**
- * Return type for the useEventSource hook.
- */
-interface UseEventSourceReturn<TEvents extends EventMap> {
-  /** Current SSE connection state */
-  state: EventSourceState;
-  subscribe: SubscribeFn<TEvents>;
-  /** Connect to the SSE endpoint */
-  connect: () => void;
-  /** Disconnect from the SSE endpoint */
-  disconnect: () => void;
-}
-
-function parseJson(raw: string): unknown {
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return raw;
-  }
-}
+  UrlOptions,
+  UseEventSourceOptions,
+  UseEventSourceReturn,
+} from "./types";
+import { buildUrl, isReservedEvent, safeParseJson } from "./utils";
 
 /**
  * Hook to manage a Server-Sent Events (SSE) connection and state.
@@ -78,27 +36,37 @@ function parseJson(raw: string): unknown {
  * }
  *
  * // Automatically connect to an SSE endpoint
- * const { connected, connect, disconnect } = useEventSource<SSEvents>(`/api/sse/${userId}`, {
- *   on: {
- *     // Default handlers
- *     open: () => console.log("SSE opened"),
- *     message: (data) => console.log("Received message:", data),
- *     error: (e) => console.error("SSE error:", e),
+ * const { subscribe, state, connect, disconnect } = useEventSource<SSEvents>("/api/sse/", { enabled: true });
  *
- *     // Custom named event handler
- *     connected: (data) => console.log("SSE connected:", data),
- *   },
- *  }
+ * // Listen for the "connected" event
+ * useEffect(() => {
+ *  const off = subscribe("connected", (data) => {
+ *    console.log("SSE connected:", data);
+ *  });
+ *
+ *  // Unnamed events (raw message)
+ *  // This listens to all "message" events that do not have a specific name
+ *  // Typically used for simple text or JSON messages without a custom event name
+ *  const offMessage = subscribe("message", (data, ev) => {
+ *    console.log("SSE message:", data);
+ *  });
+ *
+ *  // Cleanup on unmount
+ *  return () => {
+ *    off();
+ *    offMessage();
+ *  };
+ * }, [subscribe]);
  */
 export function useEventSource<TEvents extends EventMap = EventMap>(
-  url: string,
+  url: string | UrlOptions,
   opts?: UseEventSourceOptions,
 ): UseEventSourceReturn<TEvents> {
   const {
     enabled = false,
     withCredentials = false,
     lastEventId,
-    parse = parseJson,
+    parse = safeParseJson,
     reconnect = {},
   } = opts ?? {};
 
@@ -114,13 +82,16 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const destroyedRef = useRef(false);
 
-  // One Set per event name (supports multiple listeners per event)
+  // name -> Set<handler>
   const listenersRef = useRef<Map<string, Set<AnyHandler<TEvents, string>>>>(new Map()); // prettier-ignore
 
-  // Track which named events have a browser-level listener wired
-  const attachedNamesRef = useRef<Set<string>>(new Set());
+  // name -> DOM dispatcher
+  const dispatchersRef = useRef<Map<string, (ev: MessageEvent) => void>>(new Map()); // prettier-ignore
+
+  const urlString = useMemo(() => buildUrl(url), [url]);
 
   const [state, setState] = useState<EventSourceState>({
+    url: urlString,
     connected: false,
     readyState: 0,
     lastEventId: lastEventId ?? null,
@@ -146,6 +117,50 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
     }
   }, []);
 
+  // Attach a named event listener to the current EventSource if not already attached
+  const attachNamedIfNeeded = useCallback(
+    (name: string) => {
+      if (isReservedEvent(name)) {
+        return;
+      }
+
+      if (!eventSourceRef.current || dispatchersRef.current.has(name)) {
+        return;
+      }
+
+      const dispatch = (ev: MessageEvent) => {
+        const set = listenersRef.current.get(name);
+
+        // quick bail if no subs
+        if (!set || set.size === 0) {
+          return;
+        }
+
+        const data = parse(ev.data as string);
+        setState((s) => ({
+          ...s,
+          lastEventId: ev.lastEventId || s.lastEventId,
+          lastEventName: name,
+          lastData: data,
+        }));
+        emit(name, data, ev);
+      };
+
+      eventSourceRef.current.addEventListener(name, dispatch);
+      dispatchersRef.current.set(name, dispatch);
+      console.log(`Attached named listener for "${name}"`);
+    },
+    [emit, parse],
+  );
+
+  const attachAllNamed = useCallback(() => {
+    for (const name of listenersRef.current.keys()) {
+      if (!isReservedEvent(name)) {
+        attachNamedIfNeeded(name);
+      }
+    }
+  }, [attachNamedIfNeeded]);
+
   // Add/remove a listener from the Map
   const addListener = useCallback(
     (name: string, handler: AnyHandler<TEvents, string>): UnsubscribeFn => {
@@ -156,44 +171,32 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
       }
       set.add(handler);
 
-      // If it's a named SSE event and we're connected, ensure a single dispatcher
-      const isReserved =
-        name === "open" || name === "error" || name === "message";
-
-      if (
-        !isReserved &&
-        eventSourceRef.current &&
-        !attachedNamesRef.current.has(name)
-      ) {
-        const dispatch = (ev: MessageEvent) => {
-          const data = parse(ev.data as string);
-          setState((s) => ({
-            ...s,
-            lastEventId: ev.lastEventId || s.lastEventId,
-            lastEventName: name,
-            lastData: data,
-          }));
-          emit(name, data, ev);
-        };
-
-        eventSourceRef.current.addEventListener(name, dispatch);
-        attachedNamesRef.current.add(name);
-      }
+      attachNamedIfNeeded(name);
 
       return () => {
+        console.log(`Listener removed for "${name}"`);
+
         const current = listenersRef.current.get(name);
         if (!current) {
           return;
         }
 
         current.delete(handler);
-
-        if (current.size === 0) {
-          listenersRef.current.delete(name);
+        if (current.size > 0) {
+          return;
         }
+
+        // last handler removed
+        listenersRef.current.delete(name);
+        const disp = dispatchersRef.current.get(name);
+
+        if (disp && eventSourceRef.current && !isReservedEvent(name)) {
+          eventSourceRef.current.removeEventListener(name, disp);
+        }
+        dispatchersRef.current.delete(name);
       };
     },
-    [parse, emit],
+    [parse, emit, attachNamedIfNeeded],
   );
 
   // Build the typed subscribe() function with reserved helpers
@@ -224,9 +227,17 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
       timerRef.current = null;
     }
 
-    attachedNamesRef.current.clear();
+    // Detach all named listeners
+    if (eventSourceRef.current) {
+      for (const [name, dispatch] of dispatchersRef.current) {
+        eventSourceRef.current.removeEventListener(name, dispatch);
+      }
+    }
+
+    dispatchersRef.current.clear();
     eventSourceRef.current?.close();
     eventSourceRef.current = null;
+    console.log("SSE cleaned up");
   }, []);
 
   const connect = useCallback(() => {
@@ -238,15 +249,18 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
     destroyedRef.current = false;
     cleanup();
 
-    const eventSource = new EventSource(url, { withCredentials });
+    const eventSource = new EventSource(urlString, { withCredentials });
     eventSourceRef.current = eventSource;
 
-    console.log("Connected to SSE:", url);
+    console.log("Connected to SSE:", urlString);
 
     eventSource.onopen = () => {
       retryRef.current = 0;
       setState((s) => ({ ...s, connected: true, readyState: 1, error: null }));
       emit("open");
+
+      // Attach all named listeners once connected
+      attachAllNamed();
     };
 
     eventSource.onerror = (e) => {
@@ -277,7 +291,7 @@ export function useEventSource<TEvents extends EventMap = EventMap>(
       }));
       emit("message", data, ev);
     };
-  }, [url, withCredentials, cleanup, parse, emit]);
+  }, [urlString, withCredentials, cleanup, parse, emit]);
 
   const scheduleReconnect = useCallback(() => {
     if (!reconnectEnabled || destroyedRef.current) {

@@ -1,1 +1,1 @@
-export * from "./useEventSource";
+export * from "./event-source";

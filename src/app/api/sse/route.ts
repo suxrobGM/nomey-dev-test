@@ -7,6 +7,11 @@ const sseHeaders = {
   Connection: "keep-alive",
 };
 
+/**
+ * Create a new SSE client connection.
+ * This will register the client and start a heartbeat to keep the connection alive.
+ * The client will receive a handshake event with its ID and user ID (if provided).
+ */
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const searchParams = req.nextUrl.searchParams;
   const userId = searchParams.get("user_id");
@@ -20,7 +25,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // Send the handshake event after the response is sent
   queueMicrotask(() => {
     client
-      .send({ data: { clientId: client.id, userId } })
+      .send({ event: "connected", data: { clientId: client.id, userId } })
       .then(() => console.log(`SSE handshake sent for client: ${client.id}`))
       .catch((err) => console.error("Handshake send failed:", err));
   });

@@ -18,6 +18,18 @@ type Body =
       id?: string;
     };
 
+/**
+ * This route handles emitting events to SSE clients.
+ * It can broadcast to all clients, send to a specific user, or a specific client.
+ * It expects a JSON payload with the kind of emission and the event details.
+ * * @example
+ * POST /api/sse/emit
+ * {
+ *  "kind": "broadcast",
+ *  "event": "notification",
+ *  "payload": { "message": "Hello, world!" },
+ * }
+ */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const body = (await req.json()) as Body;
